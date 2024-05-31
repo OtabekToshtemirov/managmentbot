@@ -8,10 +8,7 @@ const app = express();
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 
 // Ma'lumotlar bazasi ulanishi
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/taskdb', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}).then(() => {
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/taskdb').then(() => {
     console.log('MongoDB connected successfully');
 }).catch((err) => {
     console.error('MongoDB connection error:', err);
@@ -44,8 +41,9 @@ bot.onText(/\/start/, (msg) => {
         }
     };
     bot.sendMessage(chatId, "Xush kelibsiz! Men sizga vazifalaringizni boshqarishda yordam beraman. " +
-        "Vazifaning qo'shish uchun /addtask komandasini, barcha vazifalaringizni ko'rish uchun /tasks komandasini, " +
-        "vazifani o'zgartirish uchun /edittask komandasini, vazifani o'chirish uchun /deletetask komandasini kiriting.", opts);
+        "Vazifa qo'shish uchun /addtask, barcha vazifalarni ko'rish uchun /tasks, " +
+        "vazifani o'zgartirish uchun /edittask, vazifani o'chirish uchun /deletetask, va " +
+        "vazifani bajarilgan deb belgilash uchun /completetask komandasini kiriting.", opts);
 });
 
 // Vazifa qo'shish
@@ -86,85 +84,90 @@ bot.onText(/\/tasks/, async (msg) => {
     tasks.forEach((task, index) => {
         response += `${index + 1}. ${task.title} - ${task.description} - ${task.deadline.toLocaleDateString()} - ${task.priority} - ${task.completed ? 'Bajarilgan' : 'Bajarilmagan'}\n`;
     });
-    bot.sendMessage(msg.chat.id, response);
+    const options = {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: 'Vazifani o\'zgartirish', callback_data: 'edit_task' }, { text: 'Vazifani o\'chirish', callback_data: 'delete_task' }],
+                [{ text: 'Vazifani bajarilgan deb belgilash', callback_data: 'complete_task' }]
+            ]
+        }
+    };
+    bot.sendMessage(msg.chat.id, response, options);
 });
 
-// Vazifani o'zgartirish
-bot.onText(/\/edittask/, async (msg) => {
-    const chatId = msg.chat.id;
-    bot.sendMessage(chatId, "O'zgartirmoqchi bo'lgan vazifangizni raqamini kiriting:");
+// Inline button handling
+bot.on('callback_query', async (query) => {
+    const chatId = query.message.chat.id;
+    const messageId = query.message.message_id;
+    const action = query.data;
+
+    const tasks = await Task.find({ userId: chatId });
+    let response = "Qaysi vazifani tanladingiz:\n\n";
+    tasks.forEach((task, index) => {
+        response += `${index + 1}. ${task.title}\n`;
+    });
+    bot.sendMessage(chatId, response);
     bot.once('message', async (msg) => {
         const taskNumber = parseInt(msg.text);
-        const tasks = await Task.find({ userId: chatId });
         const task = tasks[taskNumber - 1];
-        if (task) {
-            bot.sendMessage(chatId, "Yangi sarlavhani kiriting:");
+        if (!task) {
+            bot.sendMessage(chatId, "Vazifa topilmadi.");
+            return;
+        }
+
+        switch (action) {
+            case 'edit_task':
+                editTask(chatId, task);
+                break;
+            case 'delete_task':
+                deleteTask(chatId, task);
+                break;
+            case 'complete_task':
+                completeTask(chatId, task);
+                break;
+        }
+    });
+});
+async function deleteTask(chatId, task) {
+    Task.deleteOne({ _id: task._id }).then(() => {
+        bot.sendMessage(chatId, "Vazifa muvaffaqiyatli o'chirildi!");
+    }).catch(err => {
+        bot.sendMessage(chatId, "Xatolik yuz berdi: " + err.message);
+    });
+}
+
+async function completeTask(chatId, task) {
+    task.completed = true;
+    task.save().then(() => {
+        bot.sendMessage(chatId, "Vazifa bajarilgan deb belgilandi!");
+    }).catch(err => {
+        bot.sendMessage(chatId, "Xatolik yuz berdi: " + err.message);
+    });
+}
+
+async function editTask(chatId, task) {
+    bot.sendMessage(chatId, "Yangi vazifaning sarlavhasini kiriting:");
+    bot.once('message', (msg) => {
+        task.title = msg.text;
+        bot.sendMessage(chatId, "Yangi vazifaning tavsifini kiriting:");
+        bot.once('message', (msg) => {
+            task.description = msg.text;
+            bot.sendMessage(chatId, "Yangi amal qilish muddatini (YYYY-MM-DD) kiriting:");
             bot.once('message', (msg) => {
-                task.title = msg.text;
-                bot.sendMessage(chatId, "Yangi tavsifni kiriting:");
+                task.deadline = new Date(msg.text);
+                bot.sendMessage(chatId, "Yangi ustuvorlikni kiriting (yuqori, o'rta, past):");
                 bot.once('message', (msg) => {
-                    task.description = msg.text;
-                    bot.sendMessage(chatId, "Yangi amal qilish muddatini (YYYY-MM-DD) kiriting:");
-                    bot.once('message', (msg) => {
-                        task.deadline = new Date(msg.text);
-                        bot.sendMessage(chatId, "Yangi ustuvorlikni kiriting (yuqori, o'rta, past):");
-                        bot.once('message', (msg) => {
-                            task.priority = msg.text;
-                            task.save().then(() => {
-                                bot.sendMessage(chatId, "Vazifa muvaffaqiyatli o'zgartirildi!");
-                            }).catch(err => {
-                                bot.sendMessage(chatId, "Xatolik yuz berdi: " + err.message);
-                            });
-                        });
+                    task.priority = msg.text;
+                    task.save().then(() => {
+                        bot.sendMessage(chatId, "Vazifa muvaffaqiyatli o'zgartirildi!");
+                    }).catch(err => {
+                        bot.sendMessage(chatId, "Xatolik yuz berdi: " + err.message);
                     });
                 });
             });
-        } else {
-            bot.sendMessage(chatId, "Vazifa topilmadi.");
-        }
+        });
     });
-});
-
-// Vazifani o'chirish
-bot.onText(/\/deletetask/, async (msg) => {
-    const chatId = msg.chat.id;
-    bot.sendMessage(chatId, "O'chirmoqchi bo'lgan vazifangizni raqamini kiriting:");
-    bot.once('message', async (msg) => {
-        const taskNumber = parseInt(msg.text);
-        const tasks = await Task.find({ userId: chatId });
-        const task = tasks[taskNumber - 1];
-        if (task) {
-            task.remove().then(() => {
-                bot.sendMessage(chatId, "Vazifa muvaffaqiyatli o'chirildi!");
-            }).catch(err => {
-                bot.sendMessage(chatId, "Xatolik yuz berdi: " + err.message);
-            });
-        } else {
-            bot.sendMessage(chatId, "Vazifa topilmadi.");
-        }
-    });
-});
-
-// Vazifani bajarilgan deb belgilash
-bot.onText(/\/completetask/, async (msg) => {
-    const chatId = msg.chat.id;
-    bot.sendMessage(chatId, "Bajarilgan deb belgilamoqchi bo'lgan vazifangizni raqamini kiriting:");
-    bot.once('message', async (msg) => {
-        const taskNumber = parseInt(msg.text);
-        const tasks = await Task.find({ userId: chatId });
-        const task = tasks[taskNumber - 1];
-        if (task) {
-            task.completed = true;
-            task.save().then(() => {
-                bot.sendMessage(chatId, "Vazifa bajarilgan deb belgilandi!");
-            }).catch(err => {
-                bot.sendMessage(chatId, "Xatolik yuz berdi: " + err.message);
-            });
-        } else {
-            bot.sendMessage(chatId, "Vazifa topilmadi.");
-        }
-    });
-});
+}
 
 // eslatma uchun
 cron.schedule('0 8 * * *', async () => {
