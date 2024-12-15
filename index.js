@@ -16,15 +16,6 @@ client.connect()
   .then(() => console.log('PostgreSQL connected successfully'))
   .catch(err => console.error('PostgreSQL connection error:', err));
 
-// Webhook endpoint
-app.use(express.json());
-bot.setWebHook(`https://managmentbot.vercel.app/api/webhook/${process.env.TELEGRAM_BOT_TOKEN}`);
-app.post(`/api/webhook/${process.env.TELEGRAM_BOT_TOKEN}`, (req, res) => {
-  console.log('Webhook received update:', req.body);
-  bot.handleUpdate(req.body);
-  res.sendStatus(200);
-});
-
 // Define Task schema and model using PostgreSQL
 const createTaskTable = async () => {
   try {
@@ -74,51 +65,51 @@ bot.onText(/\/start/, (msg) => {
 
 // Add task command
 bot.onText(/\/addtask/, async (msg) => {
-  const chatId = msg.chat.id;
-  let task = { userId: chatId };
-
-  try {
-    task.title = await getUserInput(chatId, "Yangi vazifa uchun sarlavhani kiriting:");
-    task.description = await getUserInput(chatId, "Vazifa haqida qisqacha ma'lumot kiriting:");
-    task.deadline = new Date(await getUserInput(chatId, "Vazifani tugatish vaqtni kiriting (Yil-Oy-kun):"));
-
-    // Priority selection with inline keyboard
-    const priorityOptions = {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: 'Muhim', callback_data: 'priority_high' },
-            { text: 'O\'rta', callback_data: 'priority_medium' },
-            { text: 'Muhim emas', callback_data: 'priority_low' }
+    const chatId = msg.chat.id;
+    let task = { userId: chatId };
+  
+    try {
+      task.title = await getUserInput(chatId, "Yangi vazifa uchun sarlavhani kiriting:");
+      task.description = await getUserInput(chatId, "Vazifa haqida qisqacha ma'lumot kiriting:");
+      task.deadline = new Date(await getUserInput(chatId, "Vazifani tugatish vaqtni kiriting (Yil-Oy-kun):"));
+      
+      // Priority selection with inline keyboard
+      const priorityOptions = {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: 'Muhim', callback_data: 'priority_high' },
+              { text: 'O\'rta', callback_data: 'priority_medium' },
+              { text: 'Muhim emas', callback_data: 'priority_low' }
+            ]
           ]
-        ]
-      }
-    };
-
-    await bot.sendMessage(chatId, "Vazifani darajasini tanlang:", priorityOptions);
-
-    // Wait for priority selection
-    task.priority = await new Promise((resolve) => {
-      bot.once('callback_query', (callbackQuery) => {
-        const priority = callbackQuery.data.split('_')[1];
-        bot.answerCallbackQuery(callbackQuery.id);
-        resolve(priority);
+        }
+      };
+      
+      await bot.sendMessage(chatId, "Vazifani darajasini tanlang:", priorityOptions);
+  
+      // Wait for priority selection
+      task.priority = await new Promise((resolve) => {
+        bot.once('callback_query', (callbackQuery) => {
+          const priority = callbackQuery.data.split('_')[1];
+          bot.answerCallbackQuery(callbackQuery.id);
+          resolve(priority);
+        });
       });
-    });
-
-    const query = `
+  
+      const query = `
         INSERT INTO tasks (title, description, deadline, priority, userId)
         VALUES ($1, $2, $3, $4, $5)
         RETURNING *;
       `;
-    const values = [task.title, task.description, task.deadline, task.priority, chatId];
-
-    const res = await client.query(query, values);
-    bot.sendMessage(chatId, "Vazifa muvaffaqiyatli qo'shildi!");
-  } catch (err) {
-    bot.sendMessage(chatId, "Error: " + err.message);
-  }
-});
+      const values = [task.title, task.description, task.deadline, task.priority, chatId];
+  
+      const res = await client.query(query, values);
+      bot.sendMessage(chatId, "Vazifa muvaffaqiyatli qo'shildi!");
+    } catch (err) {
+      bot.sendMessage(chatId, "Error: " + err.message);
+    }
+  });
 
 // View tasks command
 bot.onText(/\/tasks/, async (msg) => {
@@ -146,70 +137,70 @@ bot.onText(/\/tasks/, async (msg) => {
 });
 // Edit task command
 bot.onText(/\/edittask/, async (msg) => {
-  const chatId = msg.chat.id;
-
-  // Fetch tasks for the user
-  const query = `SELECT * FROM tasks WHERE userId = $1;`;
-
-  try {
-    const res = await client.query(query, [chatId]);
-    if (res.rows.length === 0) {
-      bot.sendMessage(chatId, "Sizning vazifalaringiz ro'yxati bo'sh.");
-      return;
-    }
-
-    // Display tasks to the user for selection
-    let taskList = "Sizning vazifalaringiz:\n\n";
-    res.rows.forEach((task, index) => {
-      taskList += `${index + 1}. ${task.title} - ${task.description} - ${task.deadline.toLocaleDateString()} - ${task.priority} - ${task.completed ? 'Completed' : 'Pending'}\n`;
-    });
-
-    bot.sendMessage(chatId, taskList);
-
-    // Wait for the user to select a task
-    bot.once('message', async (msg) => {
-      const taskIndex = parseInt(msg.text) - 1;
-
-      if (isNaN(taskIndex) || taskIndex < 0 || taskIndex >= res.rows.length) {
-        bot.sendMessage(chatId, "Noto'g'ri tanlov, qayta urinib ko'ring.");
+    const chatId = msg.chat.id;
+  
+    // Fetch tasks for the user
+    const query = `SELECT * FROM tasks WHERE userId = $1;`;
+  
+    try {
+      const res = await client.query(query, [chatId]);
+      if (res.rows.length === 0) {
+        bot.sendMessage(chatId, "Sizning vazifalaringiz ro'yxati bo'sh.");
         return;
       }
-
-      const task = res.rows[taskIndex];
-
-      // Ask the user for new details of the task
-      const updatedTask = { id: task.id };
-
-      try {
-        updatedTask.title = await getUserInput(chatId, "Yangi sarlavhani kiriting(yoki o'zgarishsiz qolishi uchun boshqa buyruq tanlang):");
-        updatedTask.description = await getUserInput(chatId, "Yangi ma'lumot kiriting(yoki o'zgarishsiz qolishi uchun boshqa buyruq tanlang):");
-        updatedTask.deadline = await getUserInput(chatId, "Yangi muddatni kiriting(Yil-Oy-Kun) (yoki o'zgarishsiz qolishi uchun boshqa buyruq tanlang):");
-
-        // Priority selection with inline keyboard
-        const priorityOptions = {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: 'Muhim', callback_data: 'priority_high' },
-                { text: 'Orta', callback_data: 'priority_medium' },
-                { text: 'Muhim emas', callback_data: 'priority_low' }
+  
+      // Display tasks to the user for selection
+      let taskList = "Sizning vazifalaringiz:\n\n";
+      res.rows.forEach((task, index) => {
+        taskList += `${index + 1}. ${task.title} - ${task.description} - ${task.deadline.toLocaleDateString()} - ${task.priority} - ${task.completed ? 'Completed' : 'Pending'}\n`;
+      });
+  
+      bot.sendMessage(chatId, taskList);
+  
+      // Wait for the user to select a task
+      bot.once('message', async (msg) => {
+        const taskIndex = parseInt(msg.text) - 1;
+  
+        if (isNaN(taskIndex) || taskIndex < 0 || taskIndex >= res.rows.length) {
+          bot.sendMessage(chatId, "Noto'g'ri tanlov, qayta urinib ko'ring.");
+          return;
+        }
+  
+        const task = res.rows[taskIndex];
+  
+        // Ask the user for new details of the task
+        const updatedTask = { id: task.id };
+  
+        try {
+          updatedTask.title = await getUserInput(chatId, "Yangi sarlavhani kiriting(yoki o'zgarishsiz qolishi uchun boshqa buyruq tanlang):");
+          updatedTask.description = await getUserInput(chatId, "Yangi ma'lumot kiriting(yoki o'zgarishsiz qolishi uchun boshqa buyruq tanlang):");
+          updatedTask.deadline = await getUserInput(chatId, "Yangi muddatni kiriting(Yil-Oy-Kun) (yoki o'zgarishsiz qolishi uchun boshqa buyruq tanlang):");
+  
+          // Priority selection with inline keyboard
+          const priorityOptions = {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: 'Muhim', callback_data: 'priority_high' },
+                  { text: 'Orta', callback_data: 'priority_medium' },
+                  { text: 'Muhim emas', callback_data: 'priority_low' }
+                ]
               ]
-            ]
-          }
-        };
-
-        await bot.sendMessage(chatId, "Muhimlilik darajasini tanlang:", priorityOptions);
-
-        updatedTask.priority = await new Promise((resolve) => {
-          bot.once('callback_query', (callbackQuery) => {
-            const priority = callbackQuery.data.split('_')[1];
-            bot.answerCallbackQuery(callbackQuery.id);
-            resolve(priority);
+            }
+          };
+  
+          await bot.sendMessage(chatId, "Muhimlilik darajasini tanlang:", priorityOptions);
+  
+          updatedTask.priority = await new Promise((resolve) => {
+            bot.once('callback_query', (callbackQuery) => {
+              const priority = callbackQuery.data.split('_')[1];
+              bot.answerCallbackQuery(callbackQuery.id);
+              resolve(priority);
+            });
           });
-        });
-
-        // Update the task in the database
-        const updateQuery = `
+  
+          // Update the task in the database
+          const updateQuery = `
             UPDATE tasks
             SET title = COALESCE(NULLIF($1, ''), title),
                 description = COALESCE(NULLIF($2, ''), description),
@@ -218,27 +209,27 @@ bot.onText(/\/edittask/, async (msg) => {
             WHERE id = $5
             RETURNING *;
           `;
-        const updateValues = [
-          updatedTask.title,
-          updatedTask.description,
-          updatedTask.deadline,
-          updatedTask.priority,
-          updatedTask.id
-        ];
-
-        const updateRes = await client.query(updateQuery, updateValues);
-        const updated = updateRes.rows[0];
-
-        bot.sendMessage(chatId, `Vazifa muvaffaqiyatli o'zgartirildi:\n\nTitle: ${updated.title}\nDescription: ${updated.description}\nDeadline: ${updated.deadline.toLocaleDateString()}\nPriority: ${updated.priority}`);
-      } catch (err) {
-        bot.sendMessage(chatId, "Xatolik: " + err.message);
-      }
-    });
-  } catch (err) {
-    bot.sendMessage(chatId, "Xatolik: " + err.message);
-  }
-});
-
+          const updateValues = [
+            updatedTask.title,
+            updatedTask.description,
+            updatedTask.deadline,
+            updatedTask.priority,
+            updatedTask.id
+          ];
+  
+          const updateRes = await client.query(updateQuery, updateValues);
+          const updated = updateRes.rows[0];
+  
+          bot.sendMessage(chatId, `Vazifa muvaffaqiyatli o'zgartirildi:\n\nTitle: ${updated.title}\nDescription: ${updated.description}\nDeadline: ${updated.deadline.toLocaleDateString()}\nPriority: ${updated.priority}`);
+        } catch (err) {
+          bot.sendMessage(chatId, "Xatolik: " + err.message);
+        }
+      });
+    } catch (err) {
+      bot.sendMessage(chatId, "Xatolik: " + err.message);
+    }
+  });
+  
 
 // Complete task command
 bot.onText(/\/completetask/, async (msg) => {
@@ -281,44 +272,44 @@ bot.onText(/\/completetask/, async (msg) => {
 
 // Reminder feature
 cron.schedule('0 8 * * *', async () => {
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-
-  // Format tomorrow's date as 'YYYY-MM-DD'
-  const tomorrowDate = tomorrow.toISOString().split('T')[0];
-
-  const query = `
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+  
+    // Format tomorrow's date as 'YYYY-MM-DD'
+    const tomorrowDate = tomorrow.toISOString().split('T')[0];
+  
+    const query = `
       SELECT userId, title, description, deadline 
       FROM tasks 
       WHERE completed = FALSE AND deadline = $1::DATE;
     `;
-  const values = [tomorrowDate];
-
-  try {
-    const res = await client.query(query, values);
-
-    if (res.rows.length === 0) {
-      console.log(`Ertangi kun uchun vazifalar mavjud emas: ${tomorrowDate}.`);
-      return;
-    }
-
-    res.rows.forEach(task => {
-      const message = `
+    const values = [tomorrowDate];
+  
+    try {
+      const res = await client.query(query, values);
+  
+      if (res.rows.length === 0) {
+        console.log(`Ertangi kun uchun vazifalar mavjud emas: ${tomorrowDate}.`);
+        return;
+      }
+  
+      res.rows.forEach(task => {
+        const message = `
           📅 Eslatma: Ertangi kun uchun vazifangiz mavjud!
           📝 Vazifa: ${task.title}
           📖 Tasvir: ${task.description || 'Izoh yozilmagan.'}
           ⏰ Yakuniy sana: ${new Date(task.deadline).toLocaleDateString()}
         `;
-      bot.sendMessage(task.userId, message.trim());
-    });
-
-    console.log(`Bildirishnoma yuborildi: ${tomorrowDate}.`);
-  } catch (err) {
-    console.error(`Xatolik ${tomorrowDate}:`, err.message);
-  }
-});
-
+        bot.sendMessage(task.userId, message.trim());
+      });
+  
+      console.log(`Bildirishnoma yuborildi: ${tomorrowDate}.`);
+    } catch (err) {
+      console.error(`Xatolik ${tomorrowDate}:`, err.message);
+    }
+  });
+  
 
 // Get user input utility function
 async function getUserInput(chatId, prompt) {
