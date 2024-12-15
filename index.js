@@ -9,7 +9,7 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 
 // PostgreSQL connection setup
 const client = new Client({
-  connectionString: process.env.POSTGRESQL_URI,
+  connectionString: process.env.POSTGRES_URL,
 });
 
 client.connect()
