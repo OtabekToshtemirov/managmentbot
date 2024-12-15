@@ -5,7 +5,7 @@ const { Client } = require('pg');
 const cron = require('node-cron');
 
 const app = express();
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { webhook: true });
 
 // PostgreSQL connection setup
 const client = new Client({
