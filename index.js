@@ -110,6 +110,8 @@ bot.onText(/\/addtask/, async (msg) => {
       bot.sendMessage(chatId, "Error: " + err.message);
     }
   });
+  bot.setWebHook('https://managmentbot.vercel.app/api/webhook/7733728809:AAGIxKbbtd_IY3fijmZC7UuwWBxsUsbcXv4');
+
 
 // View tasks command
 bot.onText(/\/tasks/, async (msg) => {
