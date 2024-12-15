@@ -12,7 +12,7 @@ app.use(bodyParser.json()); // Telegram webhook JSON ma'lumotlarini o'qish uchun
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { webHook: true });
 
 // Webhook ulanish URL
-const webhookUrl = `${process.env.BASE_URL}/api/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
+const webhookUrl = `${process.env.BASE_URL || 'https://managmentbot.vercel.app'}/api/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 bot.setWebHook(webhookUrl)
   .then(() => console.log('Webhook successfully set:', webhookUrl))
   .catch(err => console.error('Error setting webhook:', err));
