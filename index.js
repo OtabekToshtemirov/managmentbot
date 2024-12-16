@@ -110,7 +110,8 @@ bot.onText(/\/addtask/, async (msg) => {
       bot.sendMessage(chatId, "Error: " + err.message);
     }
   });
-  bot.setWebHook('https://managmentbot.vercel.app/api/webhook/7733728809:AAGIxKbbtd_IY3fijmZC7UuwWBxsUsbcXv4');
+  const webhookUrl = `${process.env.WEBHOOK_URL}/${process.env.TELEGRAM_BOT_TOKEN}`;
+bot.setWebHook(webhookUrl);
 
 
 // View tasks command
@@ -325,6 +326,7 @@ async function getUserInput(chatId, prompt) {
 }
 
 // Start the server
-app.listen(3000, () => {
-  console.log('Server running on port 3000');
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
