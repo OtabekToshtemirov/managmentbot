@@ -1,9 +1,14 @@
-const { bot } = require('../config/bot');
+const TelegramBot = require('node-telegram-bot-api');
 
 module.exports = async (req, res) => {
   try {
     if (req.method === 'POST') {
-      await bot.handleUpdate(req.body);
+      const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
+      
+      // Process the update
+      const { body } = req;
+      await bot.processUpdate(body);
+      
       res.status(200).json({ ok: true });
     } else {
       res.status(200).json({ status: 'webhook is active' });

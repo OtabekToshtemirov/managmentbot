@@ -2,6 +2,7 @@ require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 
 // Production (Vercel) environment
+const token = process.env.TELEGRAM_BOT_TOKEN;
 const isProd = process.env.NODE_ENV === 'production';
 const url = 'https://managmentbot.vercel.app';
 
@@ -9,22 +10,26 @@ let bot;
 
 if (isProd) {
   // Production: webhook mode
-  bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
-  bot.setWebHook(`${url}/api/webhook`);
+  bot = new TelegramBot(token, {
+    webHook: {
+      port: process.env.PORT || 3000
+    }
+  });
 } else {
   // Development: polling mode
-  bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
+  bot = new TelegramBot(token, { polling: true });
 }
 
 const initBot = async () => {
-  try {
-    if (isProd) {
-      console.log('Bot running in webhook mode');
-    } else {
-      console.log('Bot running in polling mode');
+  if (isProd) {
+    try {
+      await bot.setWebHook(`${url}/api/webhook`);
+      console.log('Webhook set successfully');
+    } catch (error) {
+      console.error('Error setting webhook:', error);
     }
-  } catch (error) {
-    console.error('Error initializing bot:', error);
+  } else {
+    console.log('Bot running in polling mode');
   }
 };
 
