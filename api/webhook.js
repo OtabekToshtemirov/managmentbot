@@ -1,9 +1,10 @@
-import TelegramBot from 'node-telegram-bot-api';
+const TelegramBot = require('node-telegram-bot-api');
+require('dotenv').config();
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const bot = new TelegramBot(token);
+const bot = new TelegramBot(token, { webHook: true });
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Verify if the request is coming from Telegram
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });

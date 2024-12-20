@@ -5,7 +5,18 @@ const { Client } = require('pg');
 const cron = require('node-cron');
 
 const app = express();
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
+app.use(express.json());
+
+// Bot initialization in webhook mode
+const url = 'https://managmentbot.vercel.app';
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
+  webHook: {
+    port: process.env.PORT || 3000
+  }
+});
+
+// Set webhook
+bot.setWebHook(`${url}/api/webhook`).catch(console.error);
 
 // PostgreSQL connection setup
 const client = new Client({
@@ -110,9 +121,6 @@ bot.onText(/\/addtask/, async (msg) => {
       bot.sendMessage(chatId, "Error: " + err.message);
     }
   });
-  const webhookUrl = `${process.env.WEBHOOK_URL}/${process.env.TELEGRAM_BOT_TOKEN}`;
-bot.setWebHook(webhookUrl);
-
 
 // View tasks command
 bot.onText(/\/tasks/, async (msg) => {
@@ -299,10 +307,10 @@ cron.schedule('0 8 * * *', async () => {
   
       res.rows.forEach(task => {
         const message = `
-          📅 Eslatma: Ertangi kun uchun vazifangiz mavjud!
-          📝 Vazifa: ${task.title}
-          📖 Tasvir: ${task.description || 'Izoh yozilmagan.'}
-          ⏰ Yakuniy sana: ${new Date(task.deadline).toLocaleDateString()}
+          Eslatma: Ertangi kun uchun vazifangiz mavjud!
+          Vazifa: ${task.title}
+          Tasvir: ${task.description || 'Izoh yozilmagan.'}
+          Yakuniy sana: ${new Date(task.deadline).toLocaleDateString()}
         `;
         bot.sendMessage(task.userId, message.trim());
       });
