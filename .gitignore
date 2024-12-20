@@ -9,8 +9,13 @@
 
 # misc
 .DS_Store
-.env
-.env.test
 .npmrc
 .yarn-debug.log
 .yarn-error.log
+
+# environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
